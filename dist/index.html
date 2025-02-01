@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>🐍</title>
+  <!-- <link data-trunk rel="copy-dir" href="assets/" data-target-path="assets/" /> -->
+  
+<script type="module" nonce="XVjq7hVAKr6ZuikZXycBeQ==">
+import init, * as bindings from '/sprouts-2361b194d5f2dfcb.js';
+const wasm = await init('/sprouts-2361b194d5f2dfcb_bg.wasm');
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+
+<link rel="modulepreload" href="/sprouts-2361b194d5f2dfcb.js" crossorigin=anonymous integrity="sha384-HLGhjTEMucoKeFsi8C6MefDlp9IZAiekYKaE6Cq1dhihHzQEFr86lDTcIm6n0wav">
+<link rel="preload" href="/sprouts-2361b194d5f2dfcb_bg.wasm" crossorigin=anonymous integrity="sha384-M8LsXnJQtZausqU+V8+XixK2idA/jPbn/01kxRjy+WuD1X81qQXmWQLXt/swGPxA" as="fetch" type="application/wasm"></head>
+
+</html>
+
+<style>
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+  }
+
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    margin: 0;
+  }
+</style>
