@@ -3,6 +3,18 @@
 https://en.wikipedia.org/wiki/Sprouts_(game)
 http://www.papg.com/show?1TMQ
 
+# Running
+
+```
+trunk serve
+```
+
+or
+
+```
+cargo run
+```
+
 ## Plan
 
 Do something very similar to https://github.com/ChrisSmith2/Sprouts-Game
