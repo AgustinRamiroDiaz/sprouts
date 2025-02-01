@@ -15,3 +15,10 @@ Game flow:
 1. the graph automatically adjusts lengths using some physics gravitational simulation to look pretty
 
 Physic simulation is key, and I hope that there's no edge overlapping
+
+Physics simulation ideas:
+
+- edges will actually be chains like https://github.com/Jondolf/avian/blob/main/crates/avian2d/examples/chain_2d.rs
+- when the user draws the edge, internally they'll be links from the chain
+- the chain will be a physics body
+- nodes and chains will try to repel each other
