@@ -2,6 +2,12 @@ use avian2d::{math::*, prelude::*};
 use bevy::window::{PrimaryWindow, WindowMode};
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
+const PARTICLE_COUNT: i32 = 50;
+const PARTICLE_RADIUS: f32 = 1.2;
+const PARTICLE_MASS: f32 = 1.0;
+const JOINT_COMPLIANCE: f32 = 0.0000001; // TODO: explore this. It seems to be important
+const PARTICLE_COLOR: Color = Color::srgb(0.2, 0.7, 0.9);
+
 fn main() {
     let mut app = App::new();
     app.add_plugins((
@@ -30,7 +36,7 @@ fn main() {
         .insert_resource(SubstepCount(50))
         .insert_resource(Gravity(Vector::NEG_Y * 1000.0))
         .add_systems(Startup, setup)
-        .add_systems(Update, follow_mouse)
+        .add_systems(Update, create_edge)
         .run();
 
     app.run();
@@ -39,19 +45,130 @@ fn main() {
 #[derive(Component)]
 struct FollowMouse;
 
-fn setup(
+#[derive(Component)]
+struct Edge {
+    start: Entity,
+    chain: Vec<Entity>,
+    end: Entity,
+}
+
+#[derive(Component)]
+struct CurrentEdge;
+
+fn setup(mut commands: Commands) {
+    commands.spawn(Camera2d);
+}
+
+fn create_edge(
+    mut commands: Commands,
+    buttons: Res<ButtonInput<MouseButton>>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    camera: Query<(&Camera, &GlobalTransform)>,
+    mut current_edge: Query<(Entity, &mut Edge), With<CurrentEdge>>,
+    // meshes: Res<Assets<Mesh>>,
+    // materials: Res<Assets<ColorMaterial>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    // let particle_mesh = meshes.get("particle").unwrap();
+    // let particle_material = materials.get("particle").unwrap();
+
+    let particle_mesh = meshes.add(Circle::new(PARTICLE_RADIUS as f32));
+    let particle_material = materials.add(PARTICLE_COLOR);
+
+    if buttons.pressed(MouseButton::Left) {
+        let window = windows.single();
+        let (camera, camera_transform) = camera.single();
+
+        if let Some(cursor_world_pos) = window
+            .cursor_position()
+            .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
+        {
+            // Check if there's a current edge
+            if let Ok((current_edge_entity, mut current_edge)) = current_edge.get_single_mut() {
+                // create one more particle
+                let new_particle = commands
+                    .spawn((
+                        RigidBody::Dynamic,
+                        Transform::from_xyz(cursor_world_pos.x, cursor_world_pos.y, 0.0),
+                        MassPropertiesBundle::from_shape(
+                            &Circle::new(PARTICLE_RADIUS as f32),
+                            PARTICLE_MASS,
+                        ),
+                        Mesh2d(particle_mesh.clone()),
+                        MeshMaterial2d(particle_material.clone()),
+                    ))
+                    .id();
+
+                // create a joint between the new particle and the last particle in the chain
+                commands.spawn(
+                    RevoluteJoint::new(current_edge.end, new_particle)
+                        .with_compliance(JOINT_COMPLIANCE),
+                );
+
+                // update the current edge
+                current_edge.chain.push(new_particle);
+
+                current_edge.end = new_particle;
+            } else {
+                // Create a new start
+                let start = commands
+                    .spawn((
+                        RigidBody::Static,
+                        Transform::from_xyz(cursor_world_pos.x, cursor_world_pos.y, 0.0),
+                        Mesh2d(particle_mesh.clone()),
+                        MeshMaterial2d(particle_material.clone()),
+                    ))
+                    .id();
+
+                commands.spawn((
+                    Edge {
+                        start,
+                        chain: vec![],
+                        end: start,
+                    },
+                    CurrentEdge,
+                ));
+            }
+        }
+    } else {
+        if let Ok((current_edge_entity, mut current_edge)) = current_edge.get_single_mut() {
+            // Add the end
+            let end = commands
+                .spawn((
+                    RigidBody::Static,
+                    Transform::from_xyz(0.0, 0.0, 0.0),
+                    Mesh2d(particle_mesh.clone()),
+                    MeshMaterial2d(particle_material.clone()),
+                ))
+                .id();
+
+            // Add a joint between the end and the last particle in the chain
+            commands
+                .spawn(RevoluteJoint::new(current_edge.end, end).with_compliance(JOINT_COMPLIANCE));
+
+            current_edge.end = end;
+
+            commands.entity(current_edge_entity).remove::<CurrentEdge>();
+        }
+        // let current_edge = current_edge.single_mut();
+        // commands.entity(current_edge.end).despawn_recursive();
+        // commands.entity(current_edge.start).despawn_recursive();
+        // current_edge.chain.iter().for_each(|entity| {
+        //     commands.entity(*entity).despawn_recursive();
+        // });
+    }
+}
+
+fn old_setup(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     commands.spawn(Camera2d);
 
-    let particle_count = 50;
-    let particle_radius = 1.2;
-    let particle_mesh = meshes.add(Circle::new(particle_radius as f32));
-    let particle_material = materials.add(Color::srgb(0.2, 0.7, 0.9));
-    let particle_mass = 1.0;
-    let compliance = 0.0000001; // TODO: explore this. It seems to be important
+    let particle_mesh = meshes.add(Circle::new(PARTICLE_RADIUS as f32));
+    let particle_material = materials.add(PARTICLE_COLOR);
 
     // Spawn kinematic particle that can follow the mouse
     let mut previous_particle = commands
@@ -64,24 +181,24 @@ fn setup(
         .id();
 
     // Spawn the rest of the particles, connecting each one to the previous one with joints
-    for i in 1..particle_count {
+    for i in 1..PARTICLE_COUNT {
         let current_particle = commands
             .spawn((
                 RigidBody::Dynamic,
                 MassPropertiesBundle::from_shape(
-                    &Circle::new(particle_radius as f32),
-                    particle_mass,
+                    &Circle::new(PARTICLE_RADIUS as f32),
+                    PARTICLE_MASS,
                 ),
                 Mesh2d(particle_mesh.clone()),
                 MeshMaterial2d(particle_material.clone()),
-                Transform::from_xyz(0.0, -i as f32 * (particle_radius as f32 * 2.0 + 1.0), 0.0),
+                Transform::from_xyz(0.0, -i as f32 * (PARTICLE_RADIUS as f32 * 2.0 + 1.0), 0.0),
             ))
             .id();
 
         commands.spawn(
             RevoluteJoint::new(previous_particle, current_particle)
-                .with_local_anchor_2(Vector::Y * (particle_radius * 2.0 + 1.0))
-                .with_compliance(compliance),
+                .with_local_anchor_2(Vector::Y * (PARTICLE_RADIUS * 2.0 + 1.0))
+                .with_compliance(JOINT_COMPLIANCE),
         );
 
         previous_particle = current_particle;
@@ -92,35 +209,14 @@ fn setup(
         .spawn((
             RigidBody::Static,
             Transform::from_xyz(0.0, 0.0, 0.0),
-            Mesh2d(meshes.add(Circle::new(particle_radius * 2.0))),
-            MeshMaterial2d(materials.add(Color::srgb(0.2, 0.7, 0.9))),
+            Mesh2d(meshes.add(Circle::new(PARTICLE_RADIUS * 2.0))),
+            MeshMaterial2d(materials.add(PARTICLE_COLOR)),
         ))
         .id();
 
     commands.spawn(
         RevoluteJoint::new(previous_particle, anchor_particle)
-            .with_local_anchor_2(Vector::Y * (particle_radius * 2.0 + 1.0))
-            .with_compliance(compliance),
+            .with_local_anchor_2(Vector::Y * (PARTICLE_RADIUS * 2.0 + 1.0))
+            .with_compliance(JOINT_COMPLIANCE),
     );
-}
-
-fn follow_mouse(
-    buttons: Res<ButtonInput<MouseButton>>,
-    windows: Query<&Window, With<PrimaryWindow>>,
-    camera: Query<(&Camera, &GlobalTransform)>,
-    mut follower: Query<&mut Transform, With<FollowMouse>>,
-) {
-    if buttons.pressed(MouseButton::Left) {
-        let window = windows.single();
-        let (camera, camera_transform) = camera.single();
-        let mut follower_position = follower.single_mut();
-
-        if let Some(cursor_world_pos) = window
-            .cursor_position()
-            .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
-        {
-            follower_position.translation =
-                cursor_world_pos.extend(follower_position.translation.z);
-        }
-    }
 }
