@@ -38,3 +38,4 @@ Physics simulation ideas:
 # TODO
 
 - only add one mesh and material resource and reuse them
+- fix: all edges are staying in the same start place

@@ -48,7 +48,7 @@ fn main() {
 #[derive(Resource)]
 struct EdgeJointSpawnTimer(Timer);
 
-const EDGE_JOINT_SPAWN_INTERVAL: f32 = 1.0 / 30.0;
+const EDGE_JOINT_SPAWN_INTERVAL: f32 = 1.0 / 2.0;
 
 #[derive(Component)]
 struct FollowMouse;
@@ -63,8 +63,25 @@ struct Edge {
 #[derive(Component)]
 struct CurrentEdge;
 
-fn setup(mut commands: Commands) {
+#[derive(Resource)]
+struct ParticleAssets {
+    mesh: Handle<Mesh>,
+    material: Handle<ColorMaterial>,
+}
+
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
     commands.spawn(Camera2d);
+
+    // Create and store the particle assets
+    let particle_assets = ParticleAssets {
+        mesh: meshes.add(Circle::new(PARTICLE_RADIUS)),
+        material: materials.add(PARTICLE_COLOR),
+    };
+    commands.insert_resource(particle_assets);
 }
 
 fn create_edge(
@@ -73,21 +90,13 @@ fn create_edge(
     windows: Query<&Window, With<PrimaryWindow>>,
     camera: Query<(&Camera, &GlobalTransform)>,
     mut current_edge: Query<(Entity, &mut Edge), With<CurrentEdge>>,
-    // meshes: Res<Assets<Mesh>>,
-    // materials: Res<Assets<ColorMaterial>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    particle_assets: Res<ParticleAssets>,
     mut edge_joint_spawn_timer: ResMut<EdgeJointSpawnTimer>,
     time: Res<Time>,
 ) {
     if !edge_joint_spawn_timer.0.tick(time.delta()).just_finished() {
         return;
     }
-    // let particle_mesh = meshes.get("particle").unwrap();
-    // let particle_material = materials.get("particle").unwrap();
-
-    let particle_mesh = meshes.add(Circle::new(PARTICLE_RADIUS as f32));
-    let particle_material = materials.add(PARTICLE_COLOR);
 
     if buttons.pressed(MouseButton::Left) {
         let window = windows.single();
@@ -108,8 +117,8 @@ fn create_edge(
                             &Circle::new(PARTICLE_RADIUS as f32),
                             PARTICLE_MASS,
                         ),
-                        Mesh2d(particle_mesh.clone()),
-                        MeshMaterial2d(particle_material.clone()),
+                        Mesh2d(particle_assets.mesh.clone()),
+                        MeshMaterial2d(particle_assets.material.clone()),
                     ))
                     .id();
 
@@ -129,8 +138,8 @@ fn create_edge(
                     .spawn((
                         RigidBody::Static,
                         Transform::from_xyz(cursor_world_pos.x, cursor_world_pos.y, 0.0),
-                        Mesh2d(particle_mesh.clone()),
-                        MeshMaterial2d(particle_material.clone()),
+                        Mesh2d(particle_assets.mesh.clone()),
+                        MeshMaterial2d(particle_assets.material.clone()),
                     ))
                     .id();
 
