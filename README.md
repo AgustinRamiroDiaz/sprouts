@@ -34,3 +34,7 @@ Physics simulation ideas:
 - when the user draws the edge, internally they'll be links from the chain
 - the chain will be a physics body
 - nodes and chains will try to repel each other
+
+# TODO
+
+- only add one mesh and material resource and reuse them

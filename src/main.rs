@@ -2,7 +2,6 @@ use avian2d::{math::*, prelude::*};
 use bevy::window::{PrimaryWindow, WindowMode};
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
-const PARTICLE_COUNT: i32 = 50;
 const PARTICLE_RADIUS: f32 = 1.2;
 const PARTICLE_MASS: f32 = 1.0;
 const JOINT_COMPLIANCE: f32 = 0.0000001; // TODO: explore this. It seems to be important
@@ -158,65 +157,4 @@ fn create_edge(
         //     commands.entity(*entity).despawn_recursive();
         // });
     }
-}
-
-fn old_setup(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-) {
-    commands.spawn(Camera2d);
-
-    let particle_mesh = meshes.add(Circle::new(PARTICLE_RADIUS as f32));
-    let particle_material = materials.add(PARTICLE_COLOR);
-
-    // Spawn kinematic particle that can follow the mouse
-    let mut previous_particle = commands
-        .spawn((
-            RigidBody::Kinematic,
-            FollowMouse,
-            Mesh2d(particle_mesh.clone()),
-            MeshMaterial2d(particle_material.clone()),
-        ))
-        .id();
-
-    // Spawn the rest of the particles, connecting each one to the previous one with joints
-    for i in 1..PARTICLE_COUNT {
-        let current_particle = commands
-            .spawn((
-                RigidBody::Dynamic,
-                MassPropertiesBundle::from_shape(
-                    &Circle::new(PARTICLE_RADIUS as f32),
-                    PARTICLE_MASS,
-                ),
-                Mesh2d(particle_mesh.clone()),
-                MeshMaterial2d(particle_material.clone()),
-                Transform::from_xyz(0.0, -i as f32 * (PARTICLE_RADIUS as f32 * 2.0 + 1.0), 0.0),
-            ))
-            .id();
-
-        commands.spawn(
-            RevoluteJoint::new(previous_particle, current_particle)
-                .with_local_anchor_2(Vector::Y * (PARTICLE_RADIUS * 2.0 + 1.0))
-                .with_compliance(JOINT_COMPLIANCE),
-        );
-
-        previous_particle = current_particle;
-    }
-
-    // Spawn the fixed anchor and the last joint
-    let anchor_particle = commands
-        .spawn((
-            RigidBody::Static,
-            Transform::from_xyz(0.0, 0.0, 0.0),
-            Mesh2d(meshes.add(Circle::new(PARTICLE_RADIUS * 2.0))),
-            MeshMaterial2d(materials.add(PARTICLE_COLOR)),
-        ))
-        .id();
-
-    commands.spawn(
-        RevoluteJoint::new(previous_particle, anchor_particle)
-            .with_local_anchor_2(Vector::Y * (PARTICLE_RADIUS * 2.0 + 1.0))
-            .with_compliance(JOINT_COMPLIANCE),
-    );
 }
