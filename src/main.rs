@@ -36,11 +36,20 @@ fn main() {
         .insert_resource(SubstepCount(50))
         .insert_resource(Gravity(Vector::NEG_Y * 1000.0))
         .add_systems(Startup, setup)
-        .add_systems(Update, create_edge)
-        .run();
+        .add_systems(Update, create_edge);
+
+    app.insert_resource(EdgeJointSpawnTimer(Timer::from_seconds(
+        EDGE_JOINT_SPAWN_INTERVAL,
+        TimerMode::Repeating,
+    )));
 
     app.run();
 }
+
+#[derive(Resource)]
+struct EdgeJointSpawnTimer(Timer);
+
+const EDGE_JOINT_SPAWN_INTERVAL: f32 = 1.0 / 30.0;
 
 #[derive(Component)]
 struct FollowMouse;
@@ -69,7 +78,12 @@ fn create_edge(
     // materials: Res<Assets<ColorMaterial>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut edge_joint_spawn_timer: ResMut<EdgeJointSpawnTimer>,
+    time: Res<Time>,
 ) {
+    if !edge_joint_spawn_timer.0.tick(time.delta()).just_finished() {
+        return;
+    }
     // let particle_mesh = meshes.get("particle").unwrap();
     // let particle_material = materials.get("particle").unwrap();
 
@@ -85,7 +99,7 @@ fn create_edge(
             .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
         {
             // Check if there's a current edge
-            if let Ok((current_edge_entity, mut current_edge)) = current_edge.get_single_mut() {
+            if let Ok((_, mut current_edge)) = current_edge.get_single_mut() {
                 // create one more particle
                 let new_particle = commands
                     .spawn((
@@ -133,21 +147,7 @@ fn create_edge(
         }
     } else {
         if let Ok((current_edge_entity, mut current_edge)) = current_edge.get_single_mut() {
-            // Add the end
-            let end = commands
-                .spawn((
-                    RigidBody::Static,
-                    Transform::from_xyz(0.0, 0.0, 0.0),
-                    Mesh2d(particle_mesh.clone()),
-                    MeshMaterial2d(particle_material.clone()),
-                ))
-                .id();
-
-            // Add a joint between the end and the last particle in the chain
-            commands
-                .spawn(RevoluteJoint::new(current_edge.end, end).with_compliance(JOINT_COMPLIANCE));
-
-            current_edge.end = end;
+            current_edge.end = *current_edge.chain.last().unwrap_or(&current_edge.start);
 
             commands.entity(current_edge_entity).remove::<CurrentEdge>();
         }
