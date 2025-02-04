@@ -1,17 +1,28 @@
 use avian2d::{math::*, prelude::*};
-use bevy::window::{PrimaryWindow, WindowMode};
+use bevy::window::WindowMode;
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
 mod curve;
+mod mouse;
 use curve::{ControlPoints, CurvePlugin};
+use mouse::{MousePlugin, MousePosition};
 
 const PARTICLE_RADIUS: f32 = 4.0;
 const PARTICLE_MASS: f32 = 1.0;
 const PARTICLE_COLOR: Color = Color::srgb(0.2, 0.7, 0.9);
 
-#[derive(Resource, Default)]
-struct MousePosition {
-    position: Vec2,
+#[derive(Component)]
+struct Edge {
+    chain: Vec<Entity>,
+}
+
+#[derive(Component)]
+struct CurrentEdge;
+
+#[derive(Resource)]
+struct ParticleAssets {
+    mesh: Handle<Mesh>,
+    material: Handle<ColorMaterial>,
 }
 
 fn main() {
@@ -37,34 +48,20 @@ fn main() {
             }),
         PhysicsPlugins::default(),
         CurvePlugin,
+        MousePlugin,
     ));
 
     app.insert_resource(Gravity(Vector::ZERO));
 
     app.insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
         .insert_resource(SubstepCount(50))
-        .insert_resource(MousePosition::default())
         .add_systems(Startup, setup)
-        .add_systems(Update, (create_edge, track_mouse));
+        .add_systems(Update, create_edge);
 
     app.run();
 }
 
 const EDGE_POINTS_MINIMUM_DISTANCE: f32 = 50.0;
-
-#[derive(Component)]
-struct Edge {
-    chain: Vec<Entity>,
-}
-
-#[derive(Component)]
-struct CurrentEdge;
-
-#[derive(Resource)]
-struct ParticleAssets {
-    mesh: Handle<Mesh>,
-    material: Handle<ColorMaterial>,
-}
 
 fn setup(
     mut commands: Commands,
@@ -166,21 +163,5 @@ fn create_edge(
 
     if let Ok((_, _, mut control_points)) = current_edge.get_single_mut() {
         control_points.points.push(cursor_world_pos);
-    }
-}
-
-fn track_mouse(
-    mut mouse_position: ResMut<MousePosition>,
-    windows: Query<&Window, With<PrimaryWindow>>,
-    camera: Query<(&Camera, &GlobalTransform)>,
-) {
-    let window = windows.single();
-    let (camera, camera_transform) = camera.single();
-
-    if let Some(cursor_world_pos) = window
-        .cursor_position()
-        .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
-    {
-        mouse_position.position = cursor_world_pos;
     }
 }
