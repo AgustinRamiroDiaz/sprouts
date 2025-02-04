@@ -36,3 +36,5 @@ Physics simulation ideas:
 - nodes and chains will try to repel each other
 
 # TODO
+
+- do not use the resorte properties of joints
