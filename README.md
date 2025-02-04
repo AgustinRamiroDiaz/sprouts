@@ -37,5 +37,4 @@ Physics simulation ideas:
 
 # TODO
 
-- add static end point
-- add joints when the edge is finished
+- fix: particles seem to have gravity

@@ -54,10 +54,7 @@ fn main() {
 #[derive(Resource)]
 struct EdgeJointSpawnTimer(Timer);
 
-const EDGE_JOINT_SPAWN_INTERVAL: f32 = 1.0 / 2.0;
-
-#[derive(Component)]
-struct FollowMouse;
+const EDGE_JOINT_SPAWN_INTERVAL: f32 = 1.0 / 10.0;
 
 #[derive(Component)]
 struct Edge {
@@ -102,10 +99,9 @@ fn create_edge(
     if !edge_joint_spawn_timer.0.tick(time.delta()).just_finished() {
         return;
     }
+    let cursor_world_pos = mouse_position.position;
 
     if buttons.pressed(MouseButton::Left) {
-        let cursor_world_pos = mouse_position.position;
-
         // Check if there's a current edge
         if let Ok((_, mut current_edge)) = current_edge.get_single_mut() {
             // create one more particle
@@ -121,12 +117,6 @@ fn create_edge(
                     MeshMaterial2d(particle_assets.material.clone()),
                 ))
                 .id();
-
-            // create a joint between the new particle and the last particle in the chain
-            commands.spawn(
-                RevoluteJoint::new(current_edge.end, new_particle)
-                    .with_compliance(JOINT_COMPLIANCE),
-            );
 
             // update the current edge
             current_edge.chain.push(new_particle);
@@ -153,8 +143,27 @@ fn create_edge(
         }
     } else {
         if let Ok((current_edge_entity, mut current_edge)) = current_edge.get_single_mut() {
-            current_edge.end = *current_edge.chain.last().unwrap_or(&current_edge.start);
+            let end = commands
+                .spawn((
+                    RigidBody::Static,
+                    Transform::from_xyz(cursor_world_pos.x, cursor_world_pos.y, 0.0),
+                    Mesh2d(particle_assets.mesh.clone()),
+                    MeshMaterial2d(particle_assets.material.clone()),
+                ))
+                .id();
+
+            current_edge.end = end;
             commands.entity(current_edge_entity).remove::<CurrentEdge>();
+
+            // create all joints from start to end
+
+            let mut current = current_edge.start;
+
+            for next in current_edge.chain.iter().chain(std::iter::once(&end)) {
+                commands
+                    .spawn(RevoluteJoint::new(current, *next).with_compliance(JOINT_COMPLIANCE));
+                current = *next;
+            }
         }
     }
 }
