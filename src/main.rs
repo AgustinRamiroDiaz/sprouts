@@ -1,7 +1,9 @@
 use avian2d::{math::*, prelude::*};
-use bevy::math::vec2;
 use bevy::window::{PrimaryWindow, WindowMode};
 use bevy::{asset::AssetMetaCheck, prelude::*};
+
+mod curve;
+use curve::{ControlPoints, CurvePlugin};
 
 const PARTICLE_RADIUS: f32 = 4.0;
 const PARTICLE_MASS: f32 = 1.0;
@@ -34,6 +36,7 @@ fn main() {
                 ..default()
             }),
         PhysicsPlugins::default(),
+        CurvePlugin,
     ));
 
     app.insert_resource(Gravity(Vector::ZERO));
@@ -42,7 +45,7 @@ fn main() {
         .insert_resource(SubstepCount(50))
         .insert_resource(MousePosition::default())
         .add_systems(Startup, setup)
-        .add_systems(Update, (create_edge, track_mouse, draw_curve, update_curve));
+        .add_systems(Update, (create_edge, track_mouse));
 
     app.run();
 }
@@ -61,43 +64,6 @@ struct CurrentEdge;
 struct ParticleAssets {
     mesh: Handle<Mesh>,
     material: Handle<ColorMaterial>,
-}
-
-/// The curve presently being displayed. This is optional because there may not be enough control
-/// points to actually generate a curve.
-#[derive(Clone, Default, Component)]
-struct Curve(Option<CubicCurve<Vec2>>);
-
-fn draw_curve(query: Query<&Curve>, mut gizmos: Gizmos) {
-    for curve in query.iter() {
-        let Some(ref curve) = curve.0 else {
-            return;
-        };
-        // Scale resolution with curve length so it doesn't degrade as the length increases.
-        let resolution = 100 * curve.segments().len();
-        gizmos.linestrip(
-            curve.iter_positions(resolution).map(|pt| pt.extend(0.0)),
-            Color::srgb(1.0, 1.0, 1.0),
-        );
-    }
-}
-
-fn form_curve(control_points: &ControlPoints) -> Curve {
-    let points = control_points.points.clone();
-
-    if points.len() < 2 {
-        Curve(None)
-    } else {
-        let curve = CubicCardinalSpline::new_catmull_rom(points)
-            .to_curve()
-            .unwrap();
-        Curve(Some(curve))
-    }
-}
-
-#[derive(Clone, Component)]
-struct ControlPoints {
-    points: Vec<Vec2>,
 }
 
 fn setup(
@@ -171,7 +137,6 @@ fn create_edge(
                     Transform::from_xyz(cursor_world_pos.x, cursor_world_pos.y, 0.0),
                     Mesh2d(particle_assets.mesh.clone()),
                     MeshMaterial2d(particle_assets.material.clone()),
-                    form_curve(&control_points),
                     control_points,
                 ))
                 .id();
@@ -201,12 +166,6 @@ fn create_edge(
 
     if let Ok((_, _, mut control_points)) = current_edge.get_single_mut() {
         control_points.points.push(cursor_world_pos);
-    }
-}
-
-fn update_curve(mut query: Query<(&ControlPoints, &mut Curve)>) {
-    for (control_points, mut curve) in query.iter_mut() {
-        *curve = form_curve(control_points);
     }
 }
 
