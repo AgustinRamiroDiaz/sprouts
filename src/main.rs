@@ -126,20 +126,22 @@ fn create_edge(
         // Left mouse pressed but no current edge
         (true, Err(_)) => {
             // Create a new start
-            let control_points = ControlPoints {
-                points: vec![cursor_world_pos],
-            };
             let start = commands
                 .spawn((
                     RigidBody::Static,
                     Transform::from_xyz(cursor_world_pos.x, cursor_world_pos.y, 0.0),
                     Mesh2d(particle_assets.mesh.clone()),
                     MeshMaterial2d(particle_assets.material.clone()),
-                    control_points,
                 ))
                 .id();
 
-            commands.spawn((Edge { chain: vec![start] }, CurrentEdge));
+            commands.spawn((
+                Edge { chain: vec![start] },
+                CurrentEdge,
+                ControlPoints {
+                    points: vec![cursor_world_pos],
+                },
+            ));
         }
 
         // Left mouse not pressed but there's a current edge

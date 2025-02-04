@@ -14,14 +14,25 @@ pub struct CurvePlugin;
 
 impl Plugin for CurvePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (draw_curve, update_curve));
+        app.add_systems(Update, (ensure_curves_exist, update_curve, draw_curve));
+    }
+}
+
+// Add this system to automatically add Curve components where needed
+fn ensure_curves_exist(
+    mut commands: Commands,
+    query: Query<Entity, (With<ControlPoints>, Without<Curve>)>,
+) {
+    for entity in query.iter() {
+        println!("Adding Curve component to entity: {:?}", entity);
+        commands.entity(entity).insert(Curve::default());
     }
 }
 
 fn draw_curve(query: Query<&Curve>, mut gizmos: Gizmos) {
     for curve in query.iter() {
         let Some(ref curve) = curve.0 else {
-            return;
+            continue; // Changed from return to continue to handle multiple curves
         };
         // Scale resolution with curve length so it doesn't degrade as the length increases.
         let resolution = 100 * curve.segments().len();
