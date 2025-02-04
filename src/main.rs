@@ -93,7 +93,7 @@ fn create_edge(
         current_edge.get_single_mut(),
     ) {
         // Left mouse pressed and there's a current edge
-        (true, Ok((_, mut current_edge, _))) => {
+        (true, Ok((_, mut current_edge, mut control_points))) => {
             let end_pos = transform
                 .get(*current_edge.chain.last().unwrap())
                 .unwrap()
@@ -120,6 +120,7 @@ fn create_edge(
 
             // update the current edge
             current_edge.chain.push(new_particle);
+            control_points.points.push(cursor_world_pos);
         }
 
         // Left mouse pressed but no current edge
@@ -142,7 +143,7 @@ fn create_edge(
         }
 
         // Left mouse not pressed but there's a current edge
-        (false, Ok((current_edge_entity, mut current_edge, _))) => {
+        (false, Ok((current_edge_entity, mut current_edge, mut control_points))) => {
             let end = commands
                 .spawn((
                     RigidBody::Static,
@@ -153,15 +154,11 @@ fn create_edge(
                 .id();
 
             current_edge.chain.push(end);
-
+            control_points.points.push(cursor_world_pos);
             commands.entity(current_edge_entity).remove::<CurrentEdge>();
         }
 
         // Left mouse not pressed and no current edge
         (false, Err(_)) => {}
-    }
-
-    if let Ok((_, _, mut control_points)) = current_edge.get_single_mut() {
-        control_points.points.push(cursor_world_pos);
     }
 }
