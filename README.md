@@ -36,5 +36,3 @@ Physics simulation ideas:
 - nodes and chains will try to repel each other
 
 # TODO
-
-- fix: particles seem to have gravity

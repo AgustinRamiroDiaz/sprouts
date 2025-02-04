@@ -2,7 +2,7 @@ use avian2d::{math::*, prelude::*};
 use bevy::window::{PrimaryWindow, WindowMode};
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
-const PARTICLE_RADIUS: f32 = 1.2;
+const PARTICLE_RADIUS: f32 = 4.0;
 const PARTICLE_MASS: f32 = 1.0;
 const JOINT_COMPLIANCE: f32 = 0.0000001; // TODO: explore this. It seems to be important
 const PARTICLE_COLOR: Color = Color::srgb(0.2, 0.7, 0.9);
@@ -36,9 +36,10 @@ fn main() {
         PhysicsPlugins::default(),
     ));
 
+    app.insert_resource(Gravity(Vector::ZERO));
+
     app.insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
         .insert_resource(SubstepCount(50))
-        .insert_resource(Gravity(Vector::NEG_Y * 1000.0))
         .insert_resource(MousePosition::default())
         .add_systems(Startup, setup)
         .add_systems(Update, (create_edge, track_mouse));
