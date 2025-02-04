@@ -42,7 +42,7 @@ fn main() {
         .insert_resource(SubstepCount(50))
         .insert_resource(MousePosition::default())
         .add_systems(Startup, setup)
-        .add_systems(Update, (create_edge, track_mouse, draw_curve));
+        .add_systems(Update, (create_edge, track_mouse, draw_curve, update_curve));
 
     app.run();
 }
@@ -63,6 +63,43 @@ struct ParticleAssets {
     material: Handle<ColorMaterial>,
 }
 
+/// The curve presently being displayed. This is optional because there may not be enough control
+/// points to actually generate a curve.
+#[derive(Clone, Default, Component)]
+struct Curve(Option<CubicCurve<Vec2>>);
+
+fn draw_curve(query: Query<&Curve>, mut gizmos: Gizmos) {
+    for curve in query.iter() {
+        let Some(ref curve) = curve.0 else {
+            return;
+        };
+        // Scale resolution with curve length so it doesn't degrade as the length increases.
+        let resolution = 100 * curve.segments().len();
+        gizmos.linestrip(
+            curve.iter_positions(resolution).map(|pt| pt.extend(0.0)),
+            Color::srgb(1.0, 1.0, 1.0),
+        );
+    }
+}
+
+fn form_curve(control_points: &ControlPoints) -> Curve {
+    let points = control_points.points.clone();
+
+    if points.len() < 2 {
+        Curve(None)
+    } else {
+        let curve = CubicCardinalSpline::new_catmull_rom(points)
+            .to_curve()
+            .unwrap();
+        Curve(Some(curve))
+    }
+}
+
+#[derive(Clone, Component)]
+struct ControlPoints {
+    points: Vec<Vec2>,
+}
+
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -76,60 +113,13 @@ fn setup(
         material: materials.add(PARTICLE_COLOR),
     };
     commands.insert_resource(particle_assets);
-
-    // Starting data for [`ControlPoints`]:
-    let default_points = vec![
-        vec2(-50., -20.),
-        vec2(-25., 25.),
-        vec2(25., 25.),
-        vec2(50., -20.),
-    ];
-
-    let default_control_data = ControlPoints {
-        points: default_points,
-    };
-
-    let curve = form_curve(&default_control_data);
-    commands.insert_resource(curve);
-}
-
-/// The curve presently being displayed. This is optional because there may not be enough control
-/// points to actually generate a curve.
-#[derive(Clone, Default, Resource)]
-struct Curve(Option<CubicCurve<Vec2>>);
-fn draw_curve(curve: Res<Curve>, mut gizmos: Gizmos) {
-    let Some(ref curve) = curve.0 else {
-        return;
-    };
-    // Scale resolution with curve length so it doesn't degrade as the length increases.
-    let resolution = 100 * curve.segments().len();
-    gizmos.linestrip(
-        curve.iter_positions(resolution).map(|pt| pt.extend(0.0)),
-        Color::srgb(1.0, 1.0, 1.0),
-    );
-}
-
-fn form_curve(control_points: &ControlPoints) -> Curve {
-    let points = control_points.points.clone();
-
-    let spline = CubicBSpline::new(points);
-    Curve(spline.to_curve().ok())
-
-    // Saving for later
-    // let spline = CubicCardinalSpline::new_catmull_rom(points);
-    // Curve(spline.to_curve().ok())
-}
-
-#[derive(Clone, Resource)]
-struct ControlPoints {
-    points: Vec<Vec2>,
 }
 
 fn create_edge(
     mut commands: Commands,
     buttons: Res<ButtonInput<MouseButton>>,
     mouse_position: Res<MousePosition>,
-    mut current_edge: Query<(Entity, &mut Edge), With<CurrentEdge>>,
+    mut current_edge: Query<(Entity, &mut Edge, &mut ControlPoints), With<CurrentEdge>>,
     particle_assets: Res<ParticleAssets>,
     transform: Query<&Transform>,
 ) {
@@ -140,7 +130,7 @@ fn create_edge(
         current_edge.get_single_mut(),
     ) {
         // Left mouse pressed and there's a current edge
-        (true, Ok((_, mut current_edge))) => {
+        (true, Ok((_, mut current_edge, _))) => {
             let end_pos = transform
                 .get(*current_edge.chain.last().unwrap())
                 .unwrap()
@@ -172,12 +162,17 @@ fn create_edge(
         // Left mouse pressed but no current edge
         (true, Err(_)) => {
             // Create a new start
+            let control_points = ControlPoints {
+                points: vec![cursor_world_pos],
+            };
             let start = commands
                 .spawn((
                     RigidBody::Static,
                     Transform::from_xyz(cursor_world_pos.x, cursor_world_pos.y, 0.0),
                     Mesh2d(particle_assets.mesh.clone()),
                     MeshMaterial2d(particle_assets.material.clone()),
+                    form_curve(&control_points),
+                    control_points,
                 ))
                 .id();
 
@@ -185,7 +180,7 @@ fn create_edge(
         }
 
         // Left mouse not pressed but there's a current edge
-        (false, Ok((current_edge_entity, mut current_edge))) => {
+        (false, Ok((current_edge_entity, mut current_edge, _))) => {
             let end = commands
                 .spawn((
                     RigidBody::Static,
@@ -196,11 +191,22 @@ fn create_edge(
                 .id();
 
             current_edge.chain.push(end);
+
             commands.entity(current_edge_entity).remove::<CurrentEdge>();
         }
 
         // Left mouse not pressed and no current edge
         (false, Err(_)) => {}
+    }
+
+    if let Ok((_, _, mut control_points)) = current_edge.get_single_mut() {
+        control_points.points.push(cursor_world_pos);
+    }
+}
+
+fn update_curve(mut query: Query<(&ControlPoints, &mut Curve)>) {
+    for (control_points, mut curve) in query.iter_mut() {
+        *curve = form_curve(control_points);
     }
 }
 
