@@ -44,18 +44,10 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, (create_edge, track_mouse));
 
-    app.insert_resource(EdgeJointSpawnTimer(Timer::from_seconds(
-        EDGE_JOINT_SPAWN_INTERVAL,
-        TimerMode::Repeating,
-    )));
-
     app.run();
 }
 
-#[derive(Resource)]
-struct EdgeJointSpawnTimer(Timer);
-
-const EDGE_JOINT_SPAWN_INTERVAL: f32 = 1.0 / 10.0;
+const EDGE_POINTS_MINIMUM_DISTANCE: f32 = 50.0;
 
 #[derive(Component)]
 struct Edge {
@@ -94,17 +86,22 @@ fn create_edge(
     mouse_position: Res<MousePosition>,
     mut current_edge: Query<(Entity, &mut Edge), With<CurrentEdge>>,
     particle_assets: Res<ParticleAssets>,
-    mut edge_joint_spawn_timer: ResMut<EdgeJointSpawnTimer>,
-    time: Res<Time>,
+    transform: Query<&Transform>,
 ) {
-    if !edge_joint_spawn_timer.0.tick(time.delta()).just_finished() {
-        return;
-    }
     let cursor_world_pos = mouse_position.position;
 
-    if buttons.pressed(MouseButton::Left) {
-        // Check if there's a current edge
-        if let Ok((_, mut current_edge)) = current_edge.get_single_mut() {
+    match (
+        buttons.pressed(MouseButton::Left),
+        current_edge.get_single_mut(),
+    ) {
+        // Left mouse pressed and there's a current edge
+        (true, Ok((_, mut current_edge))) => {
+            let end_pos = transform.get(current_edge.end).unwrap().translation.xy();
+            let distance = end_pos.distance(cursor_world_pos);
+            if distance < EDGE_POINTS_MINIMUM_DISTANCE {
+                return;
+            }
+
             // create one more particle
             let new_particle = commands
                 .spawn((
@@ -122,7 +119,10 @@ fn create_edge(
             // update the current edge
             current_edge.chain.push(new_particle);
             current_edge.end = new_particle;
-        } else {
+        }
+
+        // Left mouse pressed but no current edge
+        (true, Err(_)) => {
             // Create a new start
             let start = commands
                 .spawn((
@@ -142,8 +142,9 @@ fn create_edge(
                 CurrentEdge,
             ));
         }
-    } else {
-        if let Ok((current_edge_entity, mut current_edge)) = current_edge.get_single_mut() {
+
+        // Left mouse not pressed but there's a current edge
+        (false, Ok((current_edge_entity, mut current_edge))) => {
             let end = commands
                 .spawn((
                     RigidBody::Static,
@@ -157,7 +158,6 @@ fn create_edge(
             commands.entity(current_edge_entity).remove::<CurrentEdge>();
 
             // create all joints from start to end
-
             let mut current = current_edge.start;
 
             for next in current_edge.chain.iter().chain(std::iter::once(&end)) {
@@ -166,6 +166,9 @@ fn create_edge(
                 current = *next;
             }
         }
+
+        // Left mouse not pressed and no current edge
+        (false, Err(_)) => {}
     }
 }
 
