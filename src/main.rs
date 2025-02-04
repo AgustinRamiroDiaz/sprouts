@@ -1,4 +1,5 @@
 use avian2d::{math::*, prelude::*};
+use bevy::math::vec2;
 use bevy::window::{PrimaryWindow, WindowMode};
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
@@ -41,7 +42,7 @@ fn main() {
         .insert_resource(SubstepCount(50))
         .insert_resource(MousePosition::default())
         .add_systems(Startup, setup)
-        .add_systems(Update, (create_edge, track_mouse));
+        .add_systems(Update, (create_edge, track_mouse, draw_curve));
 
     app.run();
 }
@@ -50,9 +51,7 @@ const EDGE_POINTS_MINIMUM_DISTANCE: f32 = 50.0;
 
 #[derive(Component)]
 struct Edge {
-    start: Entity,
     chain: Vec<Entity>,
-    end: Entity,
 }
 
 #[derive(Component)]
@@ -77,6 +76,53 @@ fn setup(
         material: materials.add(PARTICLE_COLOR),
     };
     commands.insert_resource(particle_assets);
+
+    // Starting data for [`ControlPoints`]:
+    let default_points = vec![
+        vec2(-50., -20.),
+        vec2(-25., 25.),
+        vec2(25., 25.),
+        vec2(50., -20.),
+    ];
+
+    let default_control_data = ControlPoints {
+        points: default_points,
+    };
+
+    let curve = form_curve(&default_control_data);
+    commands.insert_resource(curve);
+}
+
+/// The curve presently being displayed. This is optional because there may not be enough control
+/// points to actually generate a curve.
+#[derive(Clone, Default, Resource)]
+struct Curve(Option<CubicCurve<Vec2>>);
+fn draw_curve(curve: Res<Curve>, mut gizmos: Gizmos) {
+    let Some(ref curve) = curve.0 else {
+        return;
+    };
+    // Scale resolution with curve length so it doesn't degrade as the length increases.
+    let resolution = 100 * curve.segments().len();
+    gizmos.linestrip(
+        curve.iter_positions(resolution).map(|pt| pt.extend(0.0)),
+        Color::srgb(1.0, 1.0, 1.0),
+    );
+}
+
+fn form_curve(control_points: &ControlPoints) -> Curve {
+    let points = control_points.points.clone();
+
+    let spline = CubicBSpline::new(points);
+    Curve(spline.to_curve().ok())
+
+    // Saving for later
+    // let spline = CubicCardinalSpline::new_catmull_rom(points);
+    // Curve(spline.to_curve().ok())
+}
+
+#[derive(Clone, Resource)]
+struct ControlPoints {
+    points: Vec<Vec2>,
 }
 
 fn create_edge(
@@ -95,7 +141,11 @@ fn create_edge(
     ) {
         // Left mouse pressed and there's a current edge
         (true, Ok((_, mut current_edge))) => {
-            let end_pos = transform.get(current_edge.end).unwrap().translation.xy();
+            let end_pos = transform
+                .get(*current_edge.chain.last().unwrap())
+                .unwrap()
+                .translation
+                .xy();
             let distance = end_pos.distance(cursor_world_pos);
             if distance < EDGE_POINTS_MINIMUM_DISTANCE {
                 return;
@@ -117,7 +167,6 @@ fn create_edge(
 
             // update the current edge
             current_edge.chain.push(new_particle);
-            current_edge.end = new_particle;
         }
 
         // Left mouse pressed but no current edge
@@ -132,14 +181,7 @@ fn create_edge(
                 ))
                 .id();
 
-            commands.spawn((
-                Edge {
-                    start,
-                    chain: vec![],
-                    end: start,
-                },
-                CurrentEdge,
-            ));
+            commands.spawn((Edge { chain: vec![start] }, CurrentEdge));
         }
 
         // Left mouse not pressed but there's a current edge
@@ -153,7 +195,7 @@ fn create_edge(
                 ))
                 .id();
 
-            current_edge.end = end;
+            current_edge.chain.push(end);
             commands.entity(current_edge_entity).remove::<CurrentEdge>();
         }
 

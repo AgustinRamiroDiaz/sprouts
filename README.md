@@ -35,6 +35,10 @@ Physics simulation ideas:
 - the chain will be a physics body
 - nodes and chains will try to repel each other
 
+# Useful docs
+
+- https://bevyengine.org/examples/math/cubic-splines/
+
 # TODO
 
 - start adding game logic
