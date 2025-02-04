@@ -37,4 +37,9 @@ Physics simulation ideas:
 
 # TODO
 
-- do not use the resorte properties of joints
+- start adding game logic
+  - create nodes
+  - connect nodes
+- start adding physics
+  - nodes want to repel each other
+  - edges pull each other

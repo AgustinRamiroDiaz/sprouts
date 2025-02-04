@@ -4,7 +4,6 @@ use bevy::{asset::AssetMetaCheck, prelude::*};
 
 const PARTICLE_RADIUS: f32 = 4.0;
 const PARTICLE_MASS: f32 = 1.0;
-const JOINT_COMPLIANCE: f32 = 0.0000001; // TODO: explore this. It seems to be important
 const PARTICLE_COLOR: Color = Color::srgb(0.2, 0.7, 0.9);
 
 #[derive(Resource, Default)]
@@ -156,15 +155,6 @@ fn create_edge(
 
             current_edge.end = end;
             commands.entity(current_edge_entity).remove::<CurrentEdge>();
-
-            // create all joints from start to end
-            let mut current = current_edge.start;
-
-            for next in current_edge.chain.iter().chain(std::iter::once(&end)) {
-                commands
-                    .spawn(RevoluteJoint::new(current, *next).with_compliance(JOINT_COMPLIANCE));
-                current = *next;
-            }
         }
 
         // Left mouse not pressed and no current edge
